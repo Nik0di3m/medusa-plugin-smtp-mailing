@@ -22,7 +22,7 @@ export async function POST(
     return res.status(400).json({ error: "Field 'to' is required" })
   }
 
-  logger.info(`[SMTP Test] Sending test email to ${to}`)
+  logger.info(`[SMTP Test] Starting test email flow to ${to}`)
 
   const [configs] = await smtpConfigService.listAndCountSmtpConfigs(
     {},
@@ -32,7 +32,7 @@ export async function POST(
   const config = configs[0]
 
   if (!config) {
-    logger.error("[SMTP Test] No SMTP configuration found")
+    logger.error("[SMTP Test] No SMTP configuration found in database")
     return res.status(400).json({ error: "SMTP not configured. Save configuration first." })
   }
 
@@ -40,6 +40,8 @@ export async function POST(
     logger.warn("[SMTP Test] SMTP is disabled")
     return res.status(400).json({ error: "SMTP is disabled. Enable it first." })
   }
+
+  logger.info(`[SMTP Test] Creating transporter: host=${config.host}, port=${config.port}, secure=${config.secure}, user=${config.user ? "***" : "none"}`)
 
   const transporter = nodemailer.createTransport({
     host: config.host,
@@ -51,13 +53,14 @@ export async function POST(
         : undefined,
   })
 
-  // Verify SMTP connection first
+  // Verify SMTP connection
   try {
-    logger.info(`[SMTP Test] Verifying connection to ${config.host}:${config.port}...`)
+    logger.info(`[SMTP Test] Verifying SMTP connection to ${config.host}:${config.port}...`)
     await transporter.verify()
-    logger.info("[SMTP Test] SMTP connection verified successfully")
+    logger.info("[SMTP Test] SMTP connection verified OK")
   } catch (error: any) {
-    logger.error(`[SMTP Test] SMTP connection failed: ${error.message}`)
+    logger.error(`[SMTP Test] SMTP connection FAILED: ${error.message}`)
+    logger.error(`[SMTP Test] Error code: ${error.code}, command: ${error.command}`)
     return res.status(400).json({
       error: `SMTP connection failed: ${error.message}`,
     })
@@ -68,6 +71,8 @@ export async function POST(
     const fromAddress = config.from_name
       ? `"${config.from_name}" <${config.from_email}>`
       : config.from_email
+
+    logger.info(`[SMTP Test] Sending email from=${fromAddress} to=${to}`)
 
     const info = await transporter.sendMail({
       from: fromAddress,
@@ -89,14 +94,15 @@ export async function POST(
       `,
     })
 
-    logger.info(`[SMTP Test] Test email sent to ${to} (messageId: ${info.messageId})`)
+    logger.info(`[SMTP Test] Email SENT successfully to ${to} (messageId: ${info.messageId})`)
 
     return res.json({
       success: true,
       message_id: info.messageId,
     })
   } catch (error: any) {
-    logger.error(`[SMTP Test] Failed to send test email: ${error.message}`)
+    logger.error(`[SMTP Test] Failed to send email to ${to}: ${error.message}`)
+    logger.error(`[SMTP Test] Error code: ${error.code}, command: ${error.command}, response: ${error.response}`)
     return res.status(400).json({
       error: `Failed to send email: ${error.message}`,
     })
