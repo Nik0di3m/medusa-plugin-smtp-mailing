@@ -71,6 +71,7 @@ class SmtpNotificationProviderService extends AbstractNotificationProviderServic
               pass: options.pass,
             }
           : undefined,
+      tls: { rejectUnauthorized: false },
     })
   }
 

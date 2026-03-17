@@ -57,6 +57,7 @@ export async function POST(
       config.user && config.pass
         ? { user: config.user, pass: config.pass }
         : undefined,
+    tls: { rejectUnauthorized: false },
   });
 
   // Verify SMTP connection
