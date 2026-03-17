@@ -13,7 +13,7 @@ export const PostSmtpConfigSchema = z.object({
   from_name: z.string().optional().nullable(),
   secure: z.boolean().optional().default(false),
   enabled: z.boolean().optional().default(true),
-}).strip()
+}).passthrough().transform(({ id, created_at, updated_at, deleted_at, ...rest }) => rest)
 
 export type PostSmtpConfigSchema = z.infer<typeof PostSmtpConfigSchema>
 
