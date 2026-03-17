@@ -36,6 +36,11 @@ const defaultConfig: SmtpConfig = {
   enabled: true,
 }
 
+const pickFormFields = (config: SmtpConfig) => {
+  const { host, port, user, pass, from_email, from_name, secure, enabled } = config
+  return { host, port, user, pass, from_email, from_name, secure, enabled }
+}
+
 const SmtpSettingsPage = () => {
   const queryClient = useQueryClient()
   const [formData, setFormData] = useState<SmtpConfig>(defaultConfig)
@@ -51,15 +56,18 @@ const SmtpSettingsPage = () => {
 
   useEffect(() => {
     if (data?.smtp_config) {
-      const { id, created_at, updated_at, deleted_at, ...rest } = data.smtp_config as SmtpConfig & Record<string, unknown>
       setFormData({
         ...defaultConfig,
-        ...rest,
-        id,
+        id: data.smtp_config.id,
+        host: data.smtp_config.host || "",
+        port: data.smtp_config.port || 587,
         user: data.smtp_config.user || "",
         pass: data.smtp_config.pass || "",
+        from_email: data.smtp_config.from_email || "",
         from_name: data.smtp_config.from_name || "",
-      } as SmtpConfig)
+        secure: data.smtp_config.secure ?? false,
+        enabled: data.smtp_config.enabled ?? true,
+      })
     }
   }, [data])
 
@@ -73,31 +81,30 @@ const SmtpSettingsPage = () => {
       queryClient.invalidateQueries({ queryKey: ["smtp-config"] })
       toast.success("SMTP configuration saved")
     },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to save configuration")
+    onError: (error: any) => {
+      toast.error(error?.body?.message || error.message || "Failed to save configuration")
     },
   })
 
   const testMutation = useMutation({
-    mutationFn: () => {
-      const { id, ...payload } = formData as SmtpConfig & Record<string, unknown>
-      const { created_at, updated_at, deleted_at, ...cleanPayload } = payload as Record<string, unknown>
-      return sdk.client.fetch("/admin/smtp-config", {
-        method: "POST",
-        body: cleanPayload,
-      })
+    mutationFn: (email: string) =>
+      sdk.client.fetch<{ success: boolean; message_id: string; error?: string }>(
+        "/admin/smtp-config/test",
+        {
+          method: "POST",
+          body: { to: email },
+        }
+      ),
+    onSuccess: (data) => {
+      toast.success(`Test email sent! (${data.message_id})`)
     },
-    onSuccess: () => {
-      toast.success("Configuration saved. Test email feature coming soon.")
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to send test email")
+    onError: (error: any) => {
+      toast.error(error?.body?.message || error.message || "Failed to send test email")
     },
   })
 
   const handleSave = () => {
-    const { id, ...payload } = formData
-    saveMutation.mutate(payload)
+    saveMutation.mutate(pickFormFields(formData))
   }
 
   const handleTest = () => {
@@ -105,7 +112,7 @@ const SmtpSettingsPage = () => {
       toast.error("Please enter a test email address")
       return
     }
-    testMutation.mutate()
+    testMutation.mutate(testEmail)
   }
 
   const updateField = (field: keyof SmtpConfig, value: any) => {
@@ -239,11 +246,16 @@ const SmtpSettingsPage = () => {
             variant="secondary"
             onClick={handleTest}
             isLoading={testMutation.isPending}
-            disabled={testMutation.isPending}
+            disabled={testMutation.isPending || !formData.id}
           >
             Send Test Email
           </Button>
         </div>
+        {!formData.id && (
+          <Text size="small" className="text-ui-fg-subtle">
+            Save configuration first before sending a test email.
+          </Text>
+        )}
       </div>
 
       <div className="px-6 py-4 border-t border-ui-border-base flex justify-end">
