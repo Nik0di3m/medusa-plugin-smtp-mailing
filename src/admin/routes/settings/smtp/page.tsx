@@ -51,13 +51,15 @@ const SmtpSettingsPage = () => {
 
   useEffect(() => {
     if (data?.smtp_config) {
+      const { id, created_at, updated_at, deleted_at, ...rest } = data.smtp_config as SmtpConfig & Record<string, unknown>
       setFormData({
         ...defaultConfig,
-        ...data.smtp_config,
+        ...rest,
+        id,
         user: data.smtp_config.user || "",
         pass: data.smtp_config.pass || "",
         from_name: data.smtp_config.from_name || "",
-      })
+      } as SmtpConfig)
     }
   }, [data])
 
@@ -77,13 +79,14 @@ const SmtpSettingsPage = () => {
   })
 
   const testMutation = useMutation({
-    mutationFn: () =>
-      sdk.client.fetch("/admin/smtp-config", {
+    mutationFn: () => {
+      const { id, ...payload } = formData as SmtpConfig & Record<string, unknown>
+      const { created_at, updated_at, deleted_at, ...cleanPayload } = payload as Record<string, unknown>
+      return sdk.client.fetch("/admin/smtp-config", {
         method: "POST",
-        body: {
-          ...formData,
-        },
-      }),
+        body: cleanPayload,
+      })
+    },
     onSuccess: () => {
       toast.success("Configuration saved. Test email feature coming soon.")
     },

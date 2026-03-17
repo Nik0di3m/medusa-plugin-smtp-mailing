@@ -13,7 +13,7 @@ export const PostSmtpConfigSchema = z.object({
   from_name: z.string().optional().nullable(),
   secure: z.boolean().optional().default(false),
   enabled: z.boolean().optional().default(true),
-})
+}).strip()
 
 export type PostSmtpConfigSchema = z.infer<typeof PostSmtpConfigSchema>
 
