@@ -1,10 +1,15 @@
 import { baseLayout } from "./base-layout"
 
+function formatPrice(value: unknown): string {
+  const num = Number(value ?? 0)
+  return isNaN(num) ? "0.00" : num.toFixed(2)
+}
+
 interface OrderItem {
   title?: string
   product_title?: string
   quantity?: number
-  unit_price?: number
+  unit_price?: unknown
 }
 
 interface OrderPlacedData {
@@ -12,7 +17,7 @@ interface OrderPlacedData {
   display_id?: string | number
   customer_name?: string
   items?: OrderItem[]
-  total?: number
+  total?: unknown
   currency_code?: string
   shipping_address?: {
     address_1?: string
@@ -37,7 +42,7 @@ export function html(data: OrderPlacedData): string {
     <tr>
       <td>${item.title || item.product_title || "Item"}</td>
       <td style="text-align:center;">${item.quantity || 1}</td>
-      <td style="text-align:right;">${currency} ${(item.unit_price ?? 0).toFixed(2)}</td>
+      <td style="text-align:right;">${currency} ${formatPrice(item.unit_price)}</td>
     </tr>`
     )
     .join("")
@@ -70,7 +75,7 @@ export function html(data: OrderPlacedData): string {
         ${itemsHtml}
         <tr class="total-row">
           <td colspan="2" style="text-align:right;">Total:</td>
-          <td style="text-align:right;">${currency} ${(data.total ?? 0).toFixed(2)}</td>
+          <td style="text-align:right;">${currency} ${formatPrice(data.total)}</td>
         </tr>
       </tbody>
     </table>
