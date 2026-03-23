@@ -1,5 +1,6 @@
 import { SubscriberArgs, type SubscriberConfig } from "@medusajs/framework"
 import { Modules } from "@medusajs/framework/utils"
+import { resolveSmtpConfig } from "../lib/resolve-smtp-config"
 
 export default async function orderFulfillmentCreatedHandler({
   event: { data },
@@ -12,6 +13,13 @@ export default async function orderFulfillmentCreatedHandler({
   )
 
   try {
+    const smtpConfig = await resolveSmtpConfig(container)
+
+    if (!smtpConfig || !smtpConfig.enabled) {
+      logger.info("[SMTP] SMTP disabled or not configured, skipping")
+      return
+    }
+
     const query = container.resolve("query")
     const notificationService = container.resolve(Modules.NOTIFICATION)
 
@@ -43,6 +51,7 @@ export default async function orderFulfillmentCreatedHandler({
       channel: "email",
       template: "order-fulfillment-created",
       data: {
+        __smtp_config: smtpConfig,
         order_id: order.id,
         display_id: order.display_id,
         customer_name: [order.customer?.first_name, order.customer?.last_name]

@@ -1,5 +1,6 @@
 import { SubscriberArgs, type SubscriberConfig } from "@medusajs/framework"
 import { Modules } from "@medusajs/framework/utils"
+import { resolveSmtpConfig } from "../lib/resolve-smtp-config"
 
 export default async function passwordResetHandler({
   event: { data },
@@ -14,6 +15,13 @@ export default async function passwordResetHandler({
   logger.info(`[SMTP] Handling auth.password_reset`)
 
   try {
+    const smtpConfig = await resolveSmtpConfig(container)
+
+    if (!smtpConfig || !smtpConfig.enabled) {
+      logger.info("[SMTP] SMTP disabled or not configured, skipping")
+      return
+    }
+
     const notificationService = container.resolve(Modules.NOTIFICATION)
 
     const email = data.entity_id
@@ -24,6 +32,7 @@ export default async function passwordResetHandler({
       channel: "email",
       template: "password-reset",
       data: {
+        __smtp_config: smtpConfig,
         email,
         token,
         reset_url: `${process.env.STORE_URL || "http://localhost:8000"}/reset-password?token=${token}&email=${encodeURIComponent(email)}`,

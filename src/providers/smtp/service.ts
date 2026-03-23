@@ -9,80 +9,27 @@ import {
 } from "@medusajs/framework/types"
 import nodemailer, { Transporter } from "nodemailer"
 import { getTemplate } from "./templates"
-import SmtpConfigModuleService from "../../modules/smtpConfig/service"
-import { SMTP_CONFIG_MODULE } from "../../modules/smtpConfig"
+import { SmtpConfigData } from "../../lib/resolve-smtp-config"
 
 type InjectedDependencies = {
   logger: Logger
-  [key: string]: unknown
-}
-
-type SmtpConfig = {
-  host: string
-  port: number
-  user?: string | null
-  pass?: string | null
-  from_email: string
-  from_name?: string | null
-  secure: boolean
-  enabled: boolean
 }
 
 class SmtpNotificationProviderService extends AbstractNotificationProviderService {
   static identifier = "smtp-notification"
 
   protected logger_: Logger
-  protected container_: InjectedDependencies
 
   static validateOptions(_options: Record<string, any>) {
-    // Config is managed via Admin UI (database), not via static options.
-    // No validation needed at boot time.
+    // Config is managed via Admin UI (database) and passed through notification.data.__smtp_config.
   }
 
-  constructor(container: InjectedDependencies, _options: Record<string, any>) {
+  constructor({ logger }: InjectedDependencies, _options: Record<string, any>) {
     super()
-
-    this.logger_ = container.logger as Logger
-    this.container_ = container
+    this.logger_ = logger
   }
 
-  protected async getSmtpConfig(): Promise<SmtpConfig> {
-    const smtpConfigService = this.container_[
-      SMTP_CONFIG_MODULE
-    ] as SmtpConfigModuleService
-
-    if (!smtpConfigService) {
-      throw new MedusaError(
-        MedusaError.Types.NOT_FOUND,
-        "smtpConfig module not found. Make sure the plugin is registered in medusa-config.ts plugins."
-      )
-    }
-
-    const [configs] = await smtpConfigService.listAndCountSmtpConfigs(
-      {},
-      { take: 1 }
-    )
-
-    const config = configs[0]
-
-    if (!config) {
-      throw new MedusaError(
-        MedusaError.Types.NOT_FOUND,
-        "SMTP not configured. Go to Admin → Settings → SMTP to set up your mail server."
-      )
-    }
-
-    if (!config.enabled) {
-      throw new MedusaError(
-        MedusaError.Types.NOT_ALLOWED,
-        "SMTP is disabled. Enable it in Admin → Settings → SMTP."
-      )
-    }
-
-    return config
-  }
-
-  protected createTransporter(config: SmtpConfig): Transporter {
+  protected createTransporter(config: SmtpConfigData): Transporter {
     return nodemailer.createTransport({
       host: config.host,
       port: config.port,
@@ -95,7 +42,7 @@ class SmtpNotificationProviderService extends AbstractNotificationProviderServic
     })
   }
 
-  protected buildFromAddress(config: SmtpConfig): string {
+  protected buildFromAddress(config: SmtpConfigData): string {
     return config.from_name
       ? `"${config.from_name}" <${config.from_email}>`
       : config.from_email
@@ -104,7 +51,17 @@ class SmtpNotificationProviderService extends AbstractNotificationProviderServic
   async send(
     notification: ProviderSendNotificationDTO
   ): Promise<ProviderSendNotificationResultsDTO> {
-    const config = await this.getSmtpConfig()
+    const config = (notification.data as any)?.__smtp_config as
+      | SmtpConfigData
+      | undefined
+
+    if (!config) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "SMTP config not found in notification data. Make sure subscribers pass __smtp_config."
+      )
+    }
+
     const transporter = this.createTransporter(config)
     const from = this.buildFromAddress(config)
 
