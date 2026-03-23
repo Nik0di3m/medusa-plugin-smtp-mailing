@@ -23,6 +23,8 @@ bun add @nik0di3m/medusa-plugin-smtp-mailing
 
 ## Configuration
 
+### 1. Register the plugin
+
 Add the plugin to `medusa-config.ts`:
 
 ```typescript
@@ -37,7 +39,44 @@ module.exports = defineConfig({
 });
 ```
 
-That's it. The plugin auto-registers its module, provider, subscribers, API routes, and admin UI.
+### 2. Register the notification provider (required!)
+
+You **must** also register the SMTP notification provider in the `modules` array with `channels: ["email"]`. Without this, Medusa won't know which provider handles the `email` channel and you will get:
+
+> `Could not find a notification provider for channel: email`
+
+```typescript
+module.exports = defineConfig({
+  // ...
+  modules: [
+    // ... your other modules (caching, event-bus, etc.)
+    {
+      resolve: "@medusajs/medusa/notification",
+      options: {
+        providers: [
+          {
+            resolve: "@nik0di3m/medusa-plugin-smtp-mailing/providers/smtp",
+            id: "smtp-notification",
+            options: {
+              channels: ["email"],
+            },
+          },
+        ],
+      },
+    },
+  ],
+});
+```
+
+No SMTP credentials needed here — the provider reads its configuration from the database at runtime. Configure everything via **Admin → Settings → SMTP**.
+
+### 3. Run migrations
+
+```bash
+npx medusa db:migrate
+```
+
+The plugin auto-registers its module, subscribers, API routes, and admin UI.
 
 ## SMTP Setup
 
@@ -82,6 +121,8 @@ curl -X POST http://localhost:9000/admin/smtp-config \
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `STORE_URL` | Base URL for password reset links | `http://localhost:8000` |
+
+SMTP credentials are **not** configured via environment variables. All SMTP settings are managed through the Admin UI and stored in the database.
 
 ## Email Templates
 

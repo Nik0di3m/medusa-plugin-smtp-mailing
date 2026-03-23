@@ -9,75 +9,105 @@ import {
 } from "@medusajs/framework/types"
 import nodemailer, { Transporter } from "nodemailer"
 import { getTemplate } from "./templates"
+import SmtpConfigModuleService from "../../modules/smtpConfig/service"
+import { SMTP_CONFIG_MODULE } from "../../modules/smtpConfig"
 
 type InjectedDependencies = {
   logger: Logger
+  [key: string]: unknown
 }
 
-export type SmtpProviderOptions = {
+type SmtpConfig = {
   host: string
   port: number
-  user?: string
-  pass?: string
-  from: string
-  secure?: boolean
+  user?: string | null
+  pass?: string | null
+  from_email: string
+  from_name?: string | null
+  secure: boolean
+  enabled: boolean
 }
 
 class SmtpNotificationProviderService extends AbstractNotificationProviderService {
   static identifier = "smtp-notification"
 
   protected logger_: Logger
-  protected options_: SmtpProviderOptions
-  protected transporter_: Transporter
+  protected container_: InjectedDependencies
 
-  static validateOptions(options: Record<string, any>) {
-    if (!options.host) {
-      throw new MedusaError(
-        MedusaError.Types.INVALID_DATA,
-        "SMTP host is required in the provider's options."
-      )
-    }
-    if (!options.port) {
-      throw new MedusaError(
-        MedusaError.Types.INVALID_DATA,
-        "SMTP port is required in the provider's options."
-      )
-    }
-    if (!options.from) {
-      throw new MedusaError(
-        MedusaError.Types.INVALID_DATA,
-        "SMTP from address is required in the provider's options."
-      )
-    }
+  static validateOptions(_options: Record<string, any>) {
+    // Config is managed via Admin UI (database), not via static options.
+    // No validation needed at boot time.
   }
 
-  constructor(
-    { logger }: InjectedDependencies,
-    options: SmtpProviderOptions
-  ) {
+  constructor(container: InjectedDependencies, _options: Record<string, any>) {
     super()
 
-    this.logger_ = logger
-    this.options_ = options
+    this.logger_ = container.logger as Logger
+    this.container_ = container
+  }
 
-    this.transporter_ = nodemailer.createTransport({
-      host: options.host,
-      port: options.port,
-      secure: options.secure ?? options.port === 465,
+  protected async getSmtpConfig(): Promise<SmtpConfig> {
+    const smtpConfigService = this.container_[
+      SMTP_CONFIG_MODULE
+    ] as SmtpConfigModuleService
+
+    if (!smtpConfigService) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_FOUND,
+        "smtpConfig module not found. Make sure the plugin is registered in medusa-config.ts plugins."
+      )
+    }
+
+    const [configs] = await smtpConfigService.listAndCountSmtpConfigs(
+      {},
+      { take: 1 }
+    )
+
+    const config = configs[0]
+
+    if (!config) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_FOUND,
+        "SMTP not configured. Go to Admin → Settings → SMTP to set up your mail server."
+      )
+    }
+
+    if (!config.enabled) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "SMTP is disabled. Enable it in Admin → Settings → SMTP."
+      )
+    }
+
+    return config
+  }
+
+  protected createTransporter(config: SmtpConfig): Transporter {
+    return nodemailer.createTransport({
+      host: config.host,
+      port: config.port,
+      secure: config.secure ?? config.port === 465,
       auth:
-        options.user && options.pass
-          ? {
-              user: options.user,
-              pass: options.pass,
-            }
+        config.user && config.pass
+          ? { user: config.user, pass: config.pass }
           : undefined,
       tls: { rejectUnauthorized: false },
     })
   }
 
+  protected buildFromAddress(config: SmtpConfig): string {
+    return config.from_name
+      ? `"${config.from_name}" <${config.from_email}>`
+      : config.from_email
+  }
+
   async send(
     notification: ProviderSendNotificationDTO
   ): Promise<ProviderSendNotificationResultsDTO> {
+    const config = await this.getSmtpConfig()
+    const transporter = this.createTransporter(config)
+    const from = this.buildFromAddress(config)
+
     const template = getTemplate(notification.template)
 
     if (!template) {
@@ -85,8 +115,8 @@ class SmtpNotificationProviderService extends AbstractNotificationProviderServic
         `[SMTP] No template found for "${notification.template}", sending with raw data`
       )
 
-      const info = await this.transporter_.sendMail({
-        from: this.options_.from,
+      const info = await transporter.sendMail({
+        from,
         to: notification.to,
         subject: notification.template,
         html: JSON.stringify(notification.data),
@@ -99,8 +129,8 @@ class SmtpNotificationProviderService extends AbstractNotificationProviderServic
     const html = template.html(notification.data || {})
 
     try {
-      const info = await this.transporter_.sendMail({
-        from: this.options_.from,
+      const info = await transporter.sendMail({
+        from,
         to: notification.to,
         subject,
         html,
