@@ -1,6 +1,6 @@
 {
   "name": "@nik0di3m/medusa-plugin-smtp-mailing",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "SMTP mailing plugin for Medusa.js v2 — email notifications via nodemailer.",
   "author": "nik0di3m (https://nik0di3m.pl/)",
   "license": "MIT",
