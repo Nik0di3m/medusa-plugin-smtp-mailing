@@ -8,6 +8,10 @@ export default async function shipmentCreatedHandler({
 }: SubscriberArgs<{ id: string; no_notification?: boolean }>) {
   const logger = container.resolve("logger")
 
+  logger.info(
+    `[SMTP] shipment.created event received — raw payload: ${JSON.stringify(data)}`
+  )
+
   if (data.no_notification) {
     logger.info("[SMTP] shipment.created has no_notification flag, skipping")
     return
@@ -17,6 +21,9 @@ export default async function shipmentCreatedHandler({
 
   try {
     const smtpConfig = await resolveSmtpConfig(container)
+    logger.info(
+      `[SMTP] SMTP config resolved — enabled: ${smtpConfig?.enabled}, host: ${smtpConfig?.host}`
+    )
 
     if (!smtpConfig || !smtpConfig.enabled) {
       logger.info("[SMTP] SMTP disabled or not configured, skipping")
@@ -25,6 +32,8 @@ export default async function shipmentCreatedHandler({
 
     const query = container.resolve("query")
     const notificationService = container.resolve(Modules.NOTIFICATION)
+
+    logger.info(`[SMTP] Querying fulfillment ${data.id} with order relation...`)
 
     const { data: fulfillments } = await query.graph({
       entity: "fulfillment",
@@ -40,6 +49,10 @@ export default async function shipmentCreatedHandler({
       filters: { id: data.id },
     })
 
+    logger.info(
+      `[SMTP] Fulfillment query result: ${JSON.stringify(fulfillments?.[0] ?? null, null, 2)}`
+    )
+
     if (!fulfillments || fulfillments.length === 0) {
       logger.warn(`[SMTP] Fulfillment ${data.id} not found`)
       return
@@ -49,12 +62,18 @@ export default async function shipmentCreatedHandler({
     const order = fulfillment.order
 
     if (!order) {
-      logger.warn(`[SMTP] No order linked to fulfillment ${data.id}`)
+      logger.warn(
+        `[SMTP] No order linked to fulfillment ${data.id}. Fulfillment keys: ${Object.keys(fulfillment).join(", ")}`
+      )
       return
     }
 
     const trackingNumber =
       fulfillment.tracking_links?.[0]?.tracking_number || undefined
+
+    logger.info(
+      `[SMTP] Sending shipment email to ${order.email} for order ${order.id} (display_id: ${order.display_id}, tracking: ${trackingNumber || "none"})`
+    )
 
     await notificationService.createNotifications({
       to: order.email,
@@ -72,12 +91,13 @@ export default async function shipmentCreatedHandler({
     })
 
     logger.info(
-      `[SMTP] Shipment email sent for fulfillment ${data.id} (order ${order.id})`
+      `[SMTP] Shipment email sent successfully for fulfillment ${data.id} (order ${order.id})`
     )
   } catch (error) {
     logger.error(
       `[SMTP] Failed to send shipment email for fulfillment ${data.id}: ${error.message}`
     )
+    logger.error(`[SMTP] Stack trace: ${error.stack}`)
   }
 }
 
