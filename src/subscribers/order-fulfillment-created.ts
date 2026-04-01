@@ -39,7 +39,7 @@ export default async function shipmentCreatedHandler({
       entity: "fulfillment",
       fields: [
         "id",
-        "tracking_links.*",
+        "labels.*",
         "order.id",
         "order.display_id",
         "order.email",
@@ -69,7 +69,7 @@ export default async function shipmentCreatedHandler({
     }
 
     const trackingNumber =
-      fulfillment.tracking_links?.[0]?.tracking_number || undefined
+      fulfillment.labels?.[0]?.tracking_number || undefined
 
     logger.info(
       `[SMTP] Sending shipment email to ${order.email} for order ${order.id} (display_id: ${order.display_id}, tracking: ${trackingNumber || "none"})`
