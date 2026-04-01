@@ -5,6 +5,9 @@ import * as orderFulfillmentCreated from "./order-fulfillment-created"
 import * as userCreated from "./user-created"
 import * as passwordReset from "./password-reset"
 
+export { baseLayout, defaultBaseLayout, setBaseLayout } from "./base-layout"
+export type { BaseLayoutFn } from "./base-layout"
+
 export interface EmailTemplate {
   subject: (data: Record<string, any>) => string
   html: (data: Record<string, any>) => string
@@ -29,7 +32,8 @@ const templates: Record<string, EmailTemplate> = {
 }
 
 export function getTemplate(
-  templateName: string
+  templateName: string,
+  overrides?: Record<string, EmailTemplate>
 ): EmailTemplate | undefined {
-  return templates[templateName]
+  return overrides?.[templateName] ?? templates[templateName]
 }

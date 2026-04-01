@@ -8,7 +8,9 @@ import {
   ProviderSendNotificationResultsDTO,
 } from "@medusajs/framework/types"
 import nodemailer, { Transporter } from "nodemailer"
-import { getTemplate } from "./templates"
+import { getTemplate, setBaseLayout } from "./templates"
+import type { EmailTemplate } from "./templates"
+import type { SmtpProviderOptions } from "../../types"
 import { SmtpConfigData } from "../../lib/resolve-smtp-config"
 
 type InjectedDependencies = {
@@ -19,14 +21,26 @@ class SmtpNotificationProviderService extends AbstractNotificationProviderServic
   static identifier = "smtp-notification"
 
   protected logger_: Logger
+  protected templateOverrides_?: Record<string, EmailTemplate>
 
   static validateOptions(_options: Record<string, any>) {
     // Config is managed via Admin UI (database) and passed through notification.data.__smtp_config.
   }
 
-  constructor({ logger }: InjectedDependencies, _options: Record<string, any>) {
+  constructor({ logger }: InjectedDependencies, options: SmtpProviderOptions) {
     super()
     this.logger_ = logger
+    this.templateOverrides_ = options?.templateOverrides
+
+    if (options?.baseLayoutOverride) {
+      setBaseLayout(options.baseLayoutOverride)
+      this.logger_.info("[SMTP] Custom base layout override registered")
+    }
+
+    if (options?.templateOverrides) {
+      const names = Object.keys(options.templateOverrides).join(", ")
+      this.logger_.info(`[SMTP] Template overrides registered: ${names}`)
+    }
   }
 
   protected createTransporter(config: SmtpConfigData): Transporter {
@@ -65,7 +79,7 @@ class SmtpNotificationProviderService extends AbstractNotificationProviderServic
     const transporter = this.createTransporter(config)
     const from = this.buildFromAddress(config)
 
-    const template = getTemplate(notification.template)
+    const template = getTemplate(notification.template, this.templateOverrides_)
 
     if (!template) {
       this.logger_.warn(

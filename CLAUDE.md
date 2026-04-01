@@ -52,6 +52,15 @@ Event handlers that call `notificationService.createNotifications()` with `chann
 
 The consuming Medusa project must register the provider with `channels: ["email"]` in their notification module config. No SMTP credentials are needed in config — everything is read from the DB (Admin UI). Only `channels: ["email"]` is required, otherwise `createNotifications({ channel: "email" })` will throw "Could not find a notification provider for channel: email".
 
+### Template Overrides
+
+Consumers can override email templates and/or the base layout via provider options in `medusa-config.ts`. Types are importable from `@nik0di3m/medusa-plugin-smtp-mailing/types`. The `baseLayout` function is importable from `@nik0di3m/medusa-plugin-smtp-mailing/templates` for use in custom templates.
+
+- `templateOverrides` — replace specific templates entirely (object keyed by template name, value is `{ subject(data), html(data) }`)
+- `baseLayoutOverride` — replace the HTML layout wrapper for ALL default templates (signature: `(content: string, storeName?: string) => string`)
+
+Priority: `templateOverrides[name]` > built-in template > raw data fallback.
+
 ## Key Quirks
 
 - `tls: { rejectUnauthorized: false }` is set on all transporter instances — intentional for shared hosting compatibility.

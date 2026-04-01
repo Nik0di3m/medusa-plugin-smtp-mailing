@@ -1,4 +1,6 @@
-export function baseLayout(content: string, storeName?: string): string {
+export type BaseLayoutFn = (content: string, storeName?: string) => string
+
+export function defaultBaseLayout(content: string, storeName?: string): string {
   const name = storeName || "Store"
 
   return `<!DOCTYPE html>
@@ -49,4 +51,14 @@ export function baseLayout(content: string, storeName?: string): string {
   </div>
 </body>
 </html>`
+}
+
+let activeLayout: BaseLayoutFn = defaultBaseLayout
+
+export function setBaseLayout(fn: BaseLayoutFn): void {
+  activeLayout = fn
+}
+
+export function baseLayout(content: string, storeName?: string): string {
+  return activeLayout(content, storeName)
 }
