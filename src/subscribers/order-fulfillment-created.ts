@@ -2,15 +2,18 @@ import { SubscriberArgs, type SubscriberConfig } from "@medusajs/framework"
 import { Modules } from "@medusajs/framework/utils"
 import { resolveSmtpConfig } from "../lib/resolve-smtp-config"
 
-export default async function orderFulfillmentCreatedHandler({
+export default async function shipmentCreatedHandler({
   event: { data },
   container,
-}: SubscriberArgs<{ id: string }>) {
+}: SubscriberArgs<{ id: string; no_notification?: boolean }>) {
   const logger = container.resolve("logger")
 
-  logger.info(
-    `[SMTP] Handling order.fulfillment_created for order: ${data.id}`
-  )
+  if (data.no_notification) {
+    logger.info("[SMTP] shipment.created has no_notification flag, skipping")
+    return
+  }
+
+  logger.info(`[SMTP] Handling shipment.created for fulfillment: ${data.id}`)
 
   try {
     const smtpConfig = await resolveSmtpConfig(container)
@@ -23,28 +26,35 @@ export default async function orderFulfillmentCreatedHandler({
     const query = container.resolve("query")
     const notificationService = container.resolve(Modules.NOTIFICATION)
 
-    const { data: orders } = await query.graph({
-      entity: "order",
+    const { data: fulfillments } = await query.graph({
+      entity: "fulfillment",
       fields: [
         "id",
-        "display_id",
-        "email",
-        "customer.first_name",
-        "customer.last_name",
-        "fulfillments.tracking_links.*",
+        "tracking_links.*",
+        "order.id",
+        "order.display_id",
+        "order.email",
+        "order.customer.first_name",
+        "order.customer.last_name",
       ],
       filters: { id: data.id },
     })
 
-    if (!orders || orders.length === 0) {
-      logger.warn(`[SMTP] Order ${data.id} not found`)
+    if (!fulfillments || fulfillments.length === 0) {
+      logger.warn(`[SMTP] Fulfillment ${data.id} not found`)
       return
     }
 
-    const order = orders[0]
+    const fulfillment = fulfillments[0]
+    const order = fulfillment.order
+
+    if (!order) {
+      logger.warn(`[SMTP] No order linked to fulfillment ${data.id}`)
+      return
+    }
 
     const trackingNumber =
-      order.fulfillments?.[0]?.tracking_links?.[0]?.tracking_number || undefined
+      fulfillment.tracking_links?.[0]?.tracking_number || undefined
 
     await notificationService.createNotifications({
       to: order.email,
@@ -62,15 +72,15 @@ export default async function orderFulfillmentCreatedHandler({
     })
 
     logger.info(
-      `[SMTP] Order fulfillment email sent for order ${data.id}`
+      `[SMTP] Shipment email sent for fulfillment ${data.id} (order ${order.id})`
     )
   } catch (error) {
     logger.error(
-      `[SMTP] Failed to send fulfillment email for ${data.id}: ${error.message}`
+      `[SMTP] Failed to send shipment email for fulfillment ${data.id}: ${error.message}`
     )
   }
 }
 
 export const config: SubscriberConfig = {
-  event: "order.fulfillment_created",
+  event: "shipment.created",
 }

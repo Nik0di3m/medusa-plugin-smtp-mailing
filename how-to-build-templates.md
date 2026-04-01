@@ -262,9 +262,9 @@ Each template receives a `data` object. Below are the template names and the fie
 | `reason` | `string` (optional) |
 | `store_name` | `string` |
 
-### `order-fulfillment-created`
+### `order-fulfillment-created` (shipment notification)
 
-Also matched by `order-shipment-created`.
+Triggered by the `shipment.created` event (when a shipment is created for an order, not when a fulfillment is created). Also matched by `order-shipment-created`.
 
 | Field | Type |
 |---|---|
@@ -291,6 +291,23 @@ Also matched by `order-shipment-created`.
 | `reset_url` | `string` |
 | `token` | `string` |
 | `store_name` | `string` |
+
+---
+
+## Subscribed events
+
+The plugin subscribes to the following Medusa events and sends emails automatically:
+
+| Medusa Event | Template used | Description |
+|---|---|---|
+| `order.placed` | `order-placed` | Order confirmation after checkout |
+| `order.completed` | `order-completed` | Order marked as complete |
+| `order.canceled` | `order-canceled` | Order cancellation notice |
+| `shipment.created` | `order-fulfillment-created` | Shipment notification with tracking |
+| `auth.password_reset` | `password-reset` | Password reset link |
+| `user.created` | `user-created` | Admin user / customer welcome |
+
+> **Note:** The shipment email is triggered by `shipment.created` (when a shipment is created for an order), **not** by `order.fulfillment_created` (which fires earlier, when packing starts). This ensures tracking information is available in the email.
 
 ---
 
